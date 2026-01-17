@@ -49,7 +49,7 @@ Jane follows a modular, production-grade architecture:
 
 | n8n Workflow | Google Calendar | Google Sheets |
 |-------------|----------------|---------------|
-| ![](screenshots/n8n.png) | ![](screenshots/calendar.png) | ![](screenshots/sheets.png) |
+| ![](screenshots/n8n_canvas.png) | ![](screenshots/calendar_events.png) | ![](screenshots/sheets.png) |
 
 ---
 
