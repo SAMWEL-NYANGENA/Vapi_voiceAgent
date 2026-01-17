@@ -1,0 +1,1310 @@
+{
+  "name": "voice5",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "voice-agent-query",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "15c9f013-9440-46e8-bb11-2d4c6670f57a",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1392,
+        -80
+      ],
+      "webhookId": "5cc52ad9-a4d9-4324-aa68-864ea279215d"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.query }}",
+        "options": {
+          "systemMessage": "you are a knowledge base specialist. use the query input to call the tool. once the tool returns relevant chunks, respond in a structured human format"
+        }
+      },
+      "id": "e057bf2b-6757-4c73-91dc-9f61809edd43",
+      "name": "RAG Query Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        -464,
+        -976
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ results: [{ toolCallId: $json.toolCallId, result: $json.result }] }) }}\n",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "9d3eaf13-0188-44c6-a6fc-19dade7e1d60",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        224,
+        -768
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4.1-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4.1-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "id": "5d2463ad-d405-430b-972f-3c65a0765371",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -496,
+        -752
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "0POol7EJUVWrnmTt",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  {\n    json: {\n      query: $json.body.message.toolCalls[0].function.arguments.query,\n      toolCallId: $json.body.message.toolCalls[0].id\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -720,
+        -768
+      ],
+      "id": "27f9b0f0-3b76-470c-8893-ba6dd5a7c97a",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  {\n    json: {\n      result: $json.output, \n      toolCallId: $items(\"Webhook Trigger\")[0].json.body.message.toolCalls[0].id\n    }\n  }\n];\n\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        -768
+      ],
+      "id": "947e1e06-9d10-4d06-8e08-fec54e7be16f",
+      "name": "Format Vapi Response"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Safe argument extraction\nlet toolCall = $json.body.message.toolCalls[0];\nlet args = toolCall.function.arguments;\n\n// If arguments is a string (standard for Vapi/OpenAI), parse it\nif (typeof args === 'string') { \n    args = JSON.parse(args); \n}\n\nlet inputTime = args.time;\n\n// Timezone Logic\nif (inputTime && !inputTime.includes('Z') && !inputTime.includes('+')) {\n    inputTime = inputTime + \"+03:00\";\n}\n\nlet eventTime = new Date(inputTime);\nconst endTime = new Date(eventTime.getTime() + 60 * 60 * 1000); // +1 hour\n\nreturn {\n  startTime: eventTime.toISOString(),\n  endTime: endTime.toISOString(),\n\n  // Required fields (schema-aligned)\n  name: args.name || \"Unknown\",\n  issues: args.issues || \"No issues provided\",\n  email: args.email || \"No email provided\",\n\n  // Tool tracking\n  toolCallId: toolCall.id\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -720,
+        -368
+      ],
+      "id": "c66938d6-4bfa-4fc9-acd2-fdd7de4f121a",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "31987dfb63abf966fff773fabc86fc95b18a965d1c168010341022f53c512806@group.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "Company_Bookings"
+        },
+        "start": "={{ $json.startTime }}",
+        "end": "={{ $json.endTime }}",
+        "additionalFields": {
+          "attendees": [],
+          "description": "=contact:{{ $node[\"Code in JavaScript1\"].json.email }}",
+          "summary": "=Booking: {{ $node[\"Code in JavaScript1\"].json.name }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        -368,
+        -368
+      ],
+      "id": "f1697f27-daf6-4234-8fcf-ccc2477b77cd",
+      "name": "Create an event",
+      "notesInFlow": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "PwxjLnV4kvMw1aP1",
+          "name": "Google Calendar account"
+        }
+      },
+      "notes": "Medical_bookings"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ \n  results: [\n    { \n      toolCallId: $node[\"Code in JavaScript1\"].json.toolCallId, \n      result: \"The booking has been successfully recorded in our system.\" \n    }\n  ] \n}) }}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        224,
+        -368
+      ],
+      "id": "c290a63b-dc64-4b71-8627-ffa5cc9b2982",
+      "name": "Respond to Webhook1"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1cXTV3-hM1xX2zPZ_RBF21hJXdoXocd5Di_dKXFuUeok",
+          "mode": "list",
+          "cachedResultName": "vapi_agent",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1cXTV3-hM1xX2zPZ_RBF21hJXdoXocd5Di_dKXFuUeok/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1cXTV3-hM1xX2zPZ_RBF21hJXdoXocd5Di_dKXFuUeok/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "startTime": "={{ $node[\"Code in JavaScript1\"].json.startTime }}",
+            "endTime": "={{ $node[\"Code in JavaScript1\"].json.endTime }}",
+            "name": "={{ $node[\"Code in JavaScript1\"].json.name }}",
+            "issues": "={{ $node[\"Code in JavaScript1\"].json.issues }}",
+            "contact": "={{ $node[\"Code in JavaScript1\"].json.email }}"
+          },
+          "matchingColumns": [
+            "contact"
+          ],
+          "schema": [
+            {
+              "id": "contact",
+              "displayName": "contact",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "startTime",
+              "displayName": "startTime",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "endTime",
+              "displayName": "endTime",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "issues",
+              "displayName": "issues",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        0,
+        -368
+      ],
+      "id": "0fbda2dc-ebbb-40e4-8455-b39b90d04710",
+      "name": "Append or update row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "bdvU9wuapJDK4Dxl",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "31987dfb63abf966fff773fabc86fc95b18a965d1c168010341022f53c512806@group.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "Company_Bookings"
+        },
+        "timeMax": "={{ $now.plus({ week: 3 }) }}",
+        "options": {
+          "query": "={{ $json.body.message.toolCalls[0].function.arguments.query }}\n"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        -720,
+        -176
+      ],
+      "id": "a691ab5b-f53a-464c-83d5-d859baceeef7",
+      "name": "Get many events",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "PwxjLnV4kvMw1aP1",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{\nJSON.stringify({\n  results: [\n    {\n      toolCallId: $node[\"Webhook Trigger\"].json.body.message.toolCalls[0].id,\n      result: $items(\"Get many events\").length > 0 ? {\n        booking_found: true,\n        name: $items(\"Get many events\")[0].json.summary.replace(\"Booking: \", \"\"),\n        startTime: $items(\"Get many events\")[0].json.start.dateTime\n      } : {\n        booking_found: false,\n        message: \"No booking found.\"\n      }\n    }\n  ]\n})\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        -368,
+        -176
+      ],
+      "id": "5fd2056d-8713-4184-9aa1-60730e4b4127",
+      "name": "Respond to Webhook2"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "31987dfb63abf966fff773fabc86fc95b18a965d1c168010341022f53c512806@group.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "Company_Bookings"
+        },
+        "timeMax": "={{ $now.plus({ week: 3 }) }}",
+        "options": {
+          "query": "={{ $node[\"code\"].json.query }})"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        -368,
+        256
+      ],
+      "id": "1f7e3a21-b334-4084-807a-325898e29bce",
+      "name": "Get many events1",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "PwxjLnV4kvMw1aP1",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "calendar": {
+          "__rl": true,
+          "value": "31987dfb63abf966fff773fabc86fc95b18a965d1c168010341022f53c512806@group.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "Company_Bookings"
+        },
+        "eventId": "={{ $items(\"Get many events1\")[0].json.id }}",
+        "updateFields": {
+          "end": "={{ $node[\"code\"].json.endDatetime }}",
+          "start": "={{ $node[\"code\"].json.newDatetime }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        256
+      ],
+      "id": "015e7f20-cc07-404a-8568-5a7628b04ada",
+      "name": "Update an event",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "PwxjLnV4kvMw1aP1",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the tool call arguments\nconst toolCall = $json.body.message.toolCalls[0];\nlet args = toolCall.function.arguments;\n\n// Parse if it is a string\nif (typeof args === 'string') {\n  try {\n    args = JSON.parse(args);\n  } catch (error) {\n    args = {};\n  }\n}\n\n// Extract Query\nconst query = args.query;\n\n// Extract Start Time\nlet inputTime = args.newDatetime || args.newTime;\nlet newDatetimeUTC = null;\nlet endDatetimeUTC = null;\n\nif (inputTime) {\n    // 1. Ensure we handle the timezone if missing (Defaulting to +03:00)\n    // This handles cases where Vapi might send a raw time string without offset\n    if (!inputTime.includes('Z') && !inputTime.includes('+') && !inputTime.includes('-')) {\n        inputTime = inputTime + \"+03:00\";\n    }\n\n    // 2. Create Date Object\n    const startDate = new Date(inputTime);\n    \n    // Check if valid\n    if (!isNaN(startDate.getTime())) {\n        // 3. Convert Start Time to UTC (Z format)\n        // .toISOString() automatically converts the time to UTC (Z)\n        newDatetimeUTC = startDate.toISOString();\n        \n        // 4. Calculate End Time (Add 1 Hour)\n        const endDate = new Date(startDate.getTime() + (60 * 60 * 1000));\n        \n        // 5. Convert End Time to UTC (Z format)\n        endDatetimeUTC = endDate.toISOString();\n    }\n}\n\nreturn {\n  query: query,\n  newDatetime: newDatetimeUTC, // now in Z format (e.g., ...T20:00:00.000Z)\n  endDatetime: endDatetimeUTC, // now in Z format (e.g., ...T21:00:00.000Z)\n  toolCallId: toolCall.id\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -720,
+        256
+      ],
+      "id": "8ce001f1-72b5-4b09-9b71-b1a6faf307a6",
+      "name": "code"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"results\": [\n    {\n      \"toolCallId\": \"{{ $node['Webhook Trigger'].json.body.message.toolCalls[0].id }}\",\n      \"result\": \"The booking has been successfully rescheduled.\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        448,
+        256
+      ],
+      "id": "2926bb78-7f32-4f21-80ae-ad6794c21149",
+      "name": "Respond to Webhook3"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "31987dfb63abf966fff773fabc86fc95b18a965d1c168010341022f53c512806@group.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "Company_Bookings"
+        },
+        "timeMax": "={{ $now.plus({ week: 4 }) }}",
+        "options": {
+          "query": "={{ $node[\"code1\"].json.query }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        -368,
+        448
+      ],
+      "id": "7cdc9235-088a-419a-add1-f6d40e15dddc",
+      "name": "Get many events2",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "PwxjLnV4kvMw1aP1",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "documentId": {
+          "__rl": true,
+          "value": "1cXTV3-hM1xX2zPZ_RBF21hJXdoXocd5Di_dKXFuUeok",
+          "mode": "list",
+          "cachedResultName": "vapi_agent",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1cXTV3-hM1xX2zPZ_RBF21hJXdoXocd5Di_dKXFuUeok/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1cXTV3-hM1xX2zPZ_RBF21hJXdoXocd5Di_dKXFuUeok/edit#gid=0"
+        },
+        "startIndex": "={{ $json.row_number }}"
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        448,
+        448
+      ],
+      "id": "0a9dc291-aef9-4364-afa4-1f46e2d945e8",
+      "name": "Delete rows or columns from sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "bdvU9wuapJDK4Dxl",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1cXTV3-hM1xX2zPZ_RBF21hJXdoXocd5Di_dKXFuUeok",
+          "mode": "list",
+          "cachedResultName": "vapi_agent",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1cXTV3-hM1xX2zPZ_RBF21hJXdoXocd5Di_dKXFuUeok/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1cXTV3-hM1xX2zPZ_RBF21hJXdoXocd5Di_dKXFuUeok/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "startTime": "={{ $node[\"code\"].json[\"newDatetime\"] }}",
+            "endTime": "={{ $node[\"code\"].json[\"endDatetime\"] }}",
+            "contact": "={{ $node[\"code\"].json[\"query\"] }}"
+          },
+          "matchingColumns": [
+            "contact"
+          ],
+          "schema": [
+            {
+              "id": "contact",
+              "displayName": "contact",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "startTime",
+              "displayName": "startTime",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "endTime",
+              "displayName": "endTime",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "issues",
+              "displayName": "issues",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        224,
+        256
+      ],
+      "id": "86810331-5bd3-40d9-99f1-307823ef1093",
+      "name": "Append or update row in sheet1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "bdvU9wuapJDK4Dxl",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "calendar": {
+          "__rl": true,
+          "value": "31987dfb63abf966fff773fabc86fc95b18a965d1c168010341022f53c512806@group.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "Company_Bookings"
+        },
+        "eventId": "={{ $items(\"Get many events2\")[0].json.id }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        448
+      ],
+      "id": "5c52c48c-9b26-4289-9936-5364aac22021",
+      "name": "Delete an event",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "PwxjLnV4kvMw1aP1",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"results\": [\n    {\n      \"toolCallId\": \"{{ $node['Webhook Trigger'].json.body.message.toolCalls[0].id }}\",\n      \"result\": \"The booking has been successfully cancelled and removed from our records.\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        672,
+        448
+      ],
+      "id": "0f801173-991b-46e4-b71f-9ae81b71cd4e",
+      "name": "Respond to Webhook4"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the tool call arguments\nconst toolCall = $json.body.message.toolCalls[0];\nlet args = toolCall.function.arguments;\n\n// Parse if it is a string (Common Vapi behavior)\nif (typeof args === 'string') {\n  try {\n    args = JSON.parse(args);\n  } catch (error) {\n    // Fallback if parsing fails\n    args = {};\n  }\n}\n\n\nreturn {\n  query: args.query,\n  toolCallId: toolCall.id\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -720,
+        448
+      ],
+      "id": "f9239ddb-0bcd-44b2-a667-5f4b406d1b45",
+      "name": "code1"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1cXTV3-hM1xX2zPZ_RBF21hJXdoXocd5Di_dKXFuUeok",
+          "mode": "list",
+          "cachedResultName": "vapi_agent",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1cXTV3-hM1xX2zPZ_RBF21hJXdoXocd5Di_dKXFuUeok/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1cXTV3-hM1xX2zPZ_RBF21hJXdoXocd5Di_dKXFuUeok/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "contact",
+              "lookupValue": "={{ $node[\"code1\"].json.query }}"
+            }
+          ]
+        },
+        "options": {
+          "returnFirstMatch": false
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        224,
+        448
+      ],
+      "id": "d8fbcaf7-229f-4f6c-bb25-89b258f084ea",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "bdvU9wuapJDK4Dxl",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "31987dfb63abf966fff773fabc86fc95b18a965d1c168010341022f53c512806@group.calendar.google.com",
+          "mode": "list",
+          "cachedResultName": "Company_Bookings"
+        },
+        "timeMin": "={{$json.dayStart}}",
+        "timeMax": "={{$json.dayEnd}}",
+        "options": {
+          "orderBy": "startTime"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        -368,
+        16
+      ],
+      "id": "9878fb88-e9f8-441d-8fe9-d77762f28c93",
+      "name": "Get many events3",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "PwxjLnV4kvMw1aP1",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Get the tool call data safely\nconst toolCall = $json.body.message.toolCalls[0];\nlet args = toolCall.function.arguments;\n\n// 2. Parse arguments if they come as a JSON string (common with Vapi/LLMs)\nif (typeof args === 'string') {\n  try {\n    args = JSON.parse(args);\n  } catch (error) {\n    args = {};\n  }\n}\n\nconst inputTime = args.initialSearch;\n\n// 3. Extract the Date part (YYYY-MM-DD)\n// We split by 'T' to get the date string before the time component.\n// This prevents timezone math from accidentally shifting the day.\nconst datePart = inputTime.split('T')[0];\n\n// 4. Create the hardcoded 9AM - 5PM window for that specific date\n// We append the strict +03:00 offset for Nairobi time.\nconst dayStart = `${datePart}T09:00:00+03:00`;\nconst dayEnd = `${datePart}T17:00:00+03:00`;\n\n// 5. Return the exact variables requested\nreturn {\n  dayStart: dayStart,\n  dayEnd: dayEnd,\n  toolCallId: toolCall.id\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -720,
+        16
+      ],
+      "id": "ddd8f587-ca1d-4555-8ae9-dc39a6856be6",
+      "name": "parse json strings"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        224,
+        16
+      ],
+      "id": "a4d1c39c-b1ed-4df0-8732-f1e6065e4fb2",
+      "name": "Respond to Webhook5"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Get events from the correct node name\nconst calendarItems = $('Get many events3').all();\n\n// 2. Get toolCallId from the parser\nconst toolCallId = $('parse json strings').first().json.toolCallId;\n\nlet busyIntervals = [];\n\n// 3. Extract intervals if events exist\nif (calendarItems.length > 0 && calendarItems[0].json.start) {\n    busyIntervals = calendarItems.map(item => ({\n        start: item.json.start.dateTime || item.json.start.date,\n        end: item.json.end.dateTime || item.json.end.date\n    }));\n}\n\n// 4. Return the structure\n// Note: We stringify the inner 'result' so the LLM can read it\nreturn {\n    results: [\n        {\n            toolCallId: toolCallId,\n            result: JSON.stringify({ busyIntervals: busyIntervals }) \n        }\n    ]\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -64,
+        16
+      ],
+      "id": "bc183175-a3bc-480e-9777-57c48f3b79cb",
+      "name": "Busy Intervals"
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "retrieve relevant chunks based on query",
+        "tableName": {
+          "__rl": true,
+          "value": "documents",
+          "mode": "list",
+          "cachedResultName": "documents"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreSupabase",
+      "typeVersion": 1.3,
+      "position": [
+        -368,
+        -752
+      ],
+      "id": "3e54478b-0105-42f8-8711-2cf986cd7a59",
+      "name": "Supabase Vector Store",
+      "credentials": {
+        "supabaseApi": {
+          "id": "aJmEbzY8t0VAlE1B",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -368,
+        -592
+      ],
+      "id": "b7034066-427d-40c2-93f4-5aaf56850197",
+      "name": "Embeddings OpenAI",
+      "credentials": {
+        "openAiApi": {
+          "id": "0POol7EJUVWrnmTt",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "This workflow uses a webhook Trigger. Agent posts a json payload to execute client request. post The url in this trigger in each and every tool in vapi. use the production url",
+        "height": 192
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1440,
+        -128
+      ],
+      "typeVersion": 1,
+      "id": "5c8528dd-96ee-4b72-b11e-dbbcddace30b",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "This switch node routes tool call by name. ",
+        "width": 150
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -992,
+        -192
+      ],
+      "typeVersion": 1,
+      "id": "984a70b7-c661-4e87-a777-5a5dc0918560",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.message.toolCalls[0].function.name }}",
+                    "rightValue": "RAG_TOOL",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "825eabbb-6dad-472b-a748-a59ca9ff6501"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "RAG_TOOL"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "2dbd0e20-40e3-47a4-a8a3-3b2ac060f1a6",
+                    "leftValue": "={{ $json.body.message.toolCalls[0].function.name }}",
+                    "rightValue": "booking_tool",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "booking_tool"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "4ecf4da6-8ea9-4544-86fa-9b58f829ef42",
+                    "leftValue": "={{ $json.body.message.toolCalls[0].function.name }}",
+                    "rightValue": "reschedule_tool",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "reschedule_tool"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c9453674-d633-49d9-80f5-c00f206f0c39",
+                    "leftValue": "={{ $json.body.message.toolCalls[0].function.name }}",
+                    "rightValue": "cancel_tool",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "cancel_tool"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "e9313d46-8cb0-4b37-b43f-30ee0bbe37f9",
+                    "leftValue": "={{ $json.body.message.toolCalls[0].function.name }}",
+                    "rightValue": "search_tool",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "search_tool"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "4486333f-8b26-4d17-80ec-ad511f827b6e",
+                    "leftValue": "={{ $json.body.message.toolCalls[0].function.name }}",
+                    "rightValue": "checkavailability_tool",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "checkavailability_tool"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        -944,
+        -144
+      ],
+      "id": "f981aa2e-3738-4aae-a6fd-b01284c1c2e2",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "content": "This workflows serve as the hands of my vapi voice agent. Each tool is a workflow. The agent can book, reschedule, cancel calendar events and even answer questions related to the clinic. we tested the workflows vigorously. provide your our auth credentials to run this workflow. Hit samwelnyangena@gmail.com if stuck.",
+        "height": 144,
+        "width": 1184,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -2000,
+        -544
+      ],
+      "typeVersion": 1,
+      "id": "a55c95d8-9666-4158-aa45-941ceb1080df",
+      "name": "Sticky Note2"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "RAG Query Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RAG Query Agent": {
+      "main": [
+        [
+          {
+            "node": "Format Vapi Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "RAG Query Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Vapi Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Create an event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create an event": {
+      "main": [
+        [
+          {
+            "node": "Append or update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append or update row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many events": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many events1": {
+      "main": [
+        [
+          {
+            "node": "Update an event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "code": {
+      "main": [
+        [
+          {
+            "node": "Get many events1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many events2": {
+      "main": [
+        [
+          {
+            "node": "Delete an event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete an event": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete rows or columns from sheet": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "code1": {
+      "main": [
+        [
+          {
+            "node": "Get many events2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Delete rows or columns from sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append or update row in sheet1": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "parse json strings": {
+      "main": [
+        [
+          {
+            "node": "Get many events3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many events3": {
+      "main": [
+        [
+          {
+            "node": "Busy Intervals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Busy Intervals": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update an event": {
+      "main": [
+        [
+          {
+            "node": "Append or update row in sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Webhook3": {
+      "main": [
+        []
+      ]
+    },
+    "Supabase Vector Store": {
+      "ai_tool": [
+        [
+          {
+            "node": "RAG Query Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Supabase Vector Store",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "code",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "code1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get many events",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "parse json strings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "a4b9a16b-7cea-4ad9-beb5-542ed60a9b91",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f44c52069e0a8ae760a68fb17b961c83dc080614ab91d3f795f1ee6de74f52da"
+  },
+  "id": "UUPwimPI8EUkQfdG",
+  "tags": []
+}
